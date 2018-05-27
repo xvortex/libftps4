@@ -6,4 +6,4 @@ popd
 
 make clean
 
-rm -f ps4-ftp-vtx.bin
+rm -f ps4-ftp-vtx.bin payload.js

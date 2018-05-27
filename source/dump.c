@@ -142,11 +142,11 @@ SegmentBufInfo *parse_phdr(Elf64_Phdr *phdrs, int num, int *segBufNum) {
 }
 
 void do_dump(char *saveFile, int fd, SegmentBufInfo *segBufs, int segBufNum, Elf64_Ehdr *ehdr) {
-    FILE *sf = fopen(saveFile, "wb");
-    if (sf != NULL) {
+    int sf = open(saveFile, O_WRONLY | O_CREAT | O_TRUNC, 0777);
+    if (sf != -1) {
         size_t elfsz = 0x40 + ehdr->e_phnum * sizeof(Elf64_Phdr);
         printfsocket("elf header + phdr size : 0x%08X\n", elfsz);
-        fwrite(ehdr, elfsz, 1, sf);
+        write(sf, ehdr, elfsz);
 
         for (int i = 0; i < segBufNum; i += 1) {
             printfsocket("sbuf index : %d, offset : 0x%016x, bufsz : 0x%016x, filesz : 0x%016x, enc : %d\n", segBufs[i].index, segBufs[i].fileoff, segBufs[i].bufsz, segBufs[i].filesz, segBufs[i].enc);
@@ -155,23 +155,23 @@ void do_dump(char *saveFile, int fd, SegmentBufInfo *segBufs, int segBufNum, Elf
             if (segBufs[i].enc)
             {
                 if (read_decrypt_segment(fd, segBufs[i].index, 0, segBufs[i].filesz, buf)) {
-                    fseek(sf, segBufs[i].fileoff, SEEK_SET);
-                    fwrite(buf, segBufs[i].bufsz, 1, sf);
+                    lseek(sf, segBufs[i].fileoff, SEEK_SET);
+                    write(sf, buf, segBufs[i].bufsz);
                 }
             }
             else
             {
                 lseek(fd, -segBufs[i].filesz, SEEK_END);
                 read(fd, buf, segBufs[i].filesz);
-                fseek(sf, segBufs[i].fileoff, SEEK_SET);
-                fwrite(buf, segBufs[i].filesz, 1, sf);
+                lseek(sf, segBufs[i].fileoff, SEEK_SET);
+                write(sf, buf, segBufs[i].filesz);
             }
             free(buf);
         }
-        fclose(sf);
+        close(sf);
     }
     else {
-        printfsocket("fopen %s err : %s\n", saveFile, strerror(errno));
+        printfsocket("open %s err : %s\n", saveFile, strerror(errno));
     }
 }
 

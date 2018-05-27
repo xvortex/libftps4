@@ -17,18 +17,13 @@
 
 #define FTP_DEFAULT_PATH   "/"
 
-#define MAX_CUSTOM_COMMANDS 16
-
-typedef struct {
-	const char *cmd;
-	cmd_dispatch_func func;
-} cmd_dispatch_entry;
+#define MAX_COMMANDS 32
 
 static struct {
 	const char *cmd;
 	cmd_dispatch_func func;
 	int valid;
-} custom_command_dispatchers[MAX_CUSTOM_COMMANDS];
+} command_dispatchers[MAX_COMMANDS];
 
 static int ftp_initialized = 0;
 static unsigned int file_buf_size;
@@ -780,47 +775,14 @@ static void cmd_APPE_func(ftps4_client_info_t *client)
 	receive_file(client, dest_path);
 }
 
-#define add_entry(name) {#name, cmd_##name##_func}
-static const cmd_dispatch_entry cmd_dispatch_table[] = {
-	add_entry(NOOP),
-	add_entry(USER),
-	add_entry(PASS),
-	add_entry(QUIT),
-	add_entry(SYST),
-	add_entry(PASV),
-	add_entry(PORT),
-	add_entry(LIST),
-	add_entry(PWD),
-	add_entry(CWD),
-	add_entry(TYPE),
-	add_entry(CDUP),
-	add_entry(RETR),
-	add_entry(STOR),
-	add_entry(DELE),
-	add_entry(RMD),
-	add_entry(MKD),
-	add_entry(RNFR),
-	add_entry(RNTO),
-	add_entry(SIZE),
-	add_entry(REST),
-	add_entry(FEAT),
-	add_entry(APPE),
-	{NULL, NULL}
-};
-
 static cmd_dispatch_func get_dispatch_func(const char *cmd)
 {
 	int i;
-	for(i = 0; cmd_dispatch_table[i].cmd && cmd_dispatch_table[i].func; i++) {
-		if (strcmp(cmd, cmd_dispatch_table[i].cmd) == 0) {
-			return cmd_dispatch_table[i].func;
-		}
-	}
-	// Check for custom commands
-	for(i = 0; i < MAX_CUSTOM_COMMANDS; i++) {
-		if (custom_command_dispatchers[i].valid) {
-			if (strcmp(cmd, custom_command_dispatchers[i].cmd) == 0) {
-				return custom_command_dispatchers[i].func;
+	// Check for commands
+	for(i = 0; i < MAX_COMMANDS; i++) {
+		if (command_dispatchers[i].valid) {
+			if (strcmp(cmd, command_dispatchers[i].cmd) == 0) {
+				return command_dispatchers[i].func;
 			}
 		}
 	}
@@ -1076,6 +1038,7 @@ static void *server_thread(void *arg)
 	return NULL;
 }
 
+#define add_command(name) ftps4_ext_add_command(#name, cmd_##name##_func)
 int ftps4_init(const char *ip, unsigned short int port)
 {
 	int i;
@@ -1096,9 +1059,34 @@ int ftps4_init(const char *ip, unsigned short int port)
 	scePthreadMutexInit(&client_list_mtx, NULL, "FTPS4_client_list_mutex");
 	DEBUG("Client list mutex UID: 0x%08X\n", client_list_mtx);
 
-	for (i = 0; i < MAX_CUSTOM_COMMANDS; i++) {
-		custom_command_dispatchers[i].valid = 0;
+	for (i = 0; i < MAX_COMMANDS; i++) {
+		command_dispatchers[i].valid = 0;
 	}
+
+	/* Add commands */
+	add_command(NOOP);
+	add_command(USER);
+	add_command(PASS);
+	add_command(QUIT);
+	add_command(SYST);
+	add_command(PASV);
+	add_command(PORT);
+	add_command(LIST);
+	add_command(PWD);
+	add_command(CWD);
+	add_command(TYPE);
+	add_command(CDUP);
+	add_command(RETR);
+	add_command(STOR);
+	add_command(DELE);
+	add_command(RMD);
+	add_command(MKD);
+	add_command(RNFR);
+	add_command(RNTO);
+	add_command(SIZE);
+	add_command(REST);
+	add_command(FEAT);
+	add_command(APPE);
 
 	/* Create server thread */
 	scePthreadCreate(&server_thid, NULL, server_thread, NULL, "FTPS4_server_thread");
@@ -1147,26 +1135,26 @@ void ftps4_set_file_buf_size(unsigned int size)
 	file_buf_size = size;
 }
 
-int ftps4_ext_add_custom_command(const char *cmd, cmd_dispatch_func func)
+int ftps4_ext_add_command(const char *cmd, cmd_dispatch_func func)
 {
 	int i;
-	for (i = 0; i < MAX_CUSTOM_COMMANDS; i++) {
-		if (!custom_command_dispatchers[i].valid) {
-			custom_command_dispatchers[i].cmd = cmd;
-			custom_command_dispatchers[i].func = func;
-			custom_command_dispatchers[i].valid = 1;
+	for (i = 0; i < MAX_COMMANDS; i++) {
+		if (!command_dispatchers[i].valid) {
+			command_dispatchers[i].cmd = cmd;
+			command_dispatchers[i].func = func;
+			command_dispatchers[i].valid = 1;
 			return 1;
 		}
 	}
 	return 0;
 }
 
-int ftps4_ext_del_custom_command(const char *cmd)
+int ftps4_ext_del_command(const char *cmd)
 {
 	int i;
-	for (i = 0; i < MAX_CUSTOM_COMMANDS; i++) {
-		if (strcmp(cmd, custom_command_dispatchers[i].cmd) == 0) {
-			custom_command_dispatchers[i].valid = 0;
+	for (i = 0; i < MAX_COMMANDS; i++) {
+		if (strcmp(cmd, command_dispatchers[i].cmd) == 0) {
+			command_dispatchers[i].valid = 0;
 			return 1;
 		}
 	}
